@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hội đồng AI — Fuco AI</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <a href="/" class="topbar-logo">
+      <svg width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="10" fill="#2563eb"/>
+        <circle cx="18" cy="14" r="5" fill="#fff"/>
+        <circle cx="10" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <circle cx="18" cy="27" r="3.5" fill="#fff" opacity="0.85"/>
+        <circle cx="26" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <line x1="18" y1="19" x2="10" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="18" y2="27" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="26" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+      </svg>
+      Fuco AI
+    </a>
+    <div class="topbar-right">
+      <span class="topbar-username"><%= user.username %></span>
+      <a href="/admin" class="btn btn-ghost btn-sm">← Admin</a>
+      <a href="/logout" class="btn btn-ghost btn-sm">Đăng xuất</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-header">
+      <div class="page-title">🧠 Hội đồng AI Quản lý</div>
+    </div>
+
+    <div class="council-layout">
+
+      <!-- GROQ -->
+      <div class="council-card">
+        <div class="council-card-header">
+          <div class="council-dot"></div>
+          <div>
+            <div class="council-card-title">Groq</div>
+            <div class="council-card-role">Trinh sát nhân sự · LLaMA 3.3 70B</div>
+          </div>
+        </div>
+        <div class="council-chat" id="groqChat">
+          <% if (groqHistory.length === 0) { %>
+            <div class="council-msg ai">
+              <div class="council-bubble">Xin chào! Tôi là Groq, AI trinh sát nhân sự. Mỗi ngày tôi sẽ tìm kiếm các AI platform có API miễn phí tiềm năng để báo cáo cho bạn. Bạn có thể hỏi tôi bất cứ điều gì.</div>
+            </div>
+          <% } else { %>
+            <% groqHistory.forEach(m => { %>
+              <div class="council-msg <%= m.role === 'user' ? 'user' : 'ai' %>">
+                <% if (m.isSummary || m.isReport) { %>
+                  <div class="council-report-badge"><%= m.isSummary ? '📋 Tổng hợp' : '📊 Báo cáo ngày' %></div>
+                <% } %>
+                <div class="council-bubble"><%= m.content %></div>
+                <div class="council-msg-time"><%= new Date(m.time).toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'}) %></div>
+              </div>
+            <% }) %>
+          <% } %>
+        </div>
+        <div class="council-input-area">
+          <textarea class="council-input" id="groqInput" rows="2" placeholder="Nhắn tin với Groq..." onkeydown="handleKey(event, 'groq-council')"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="sendCouncil('groq-council')" id="groqBtn">Gửi</button>
+        </div>
+      </div>
+
+      <!-- GEMINI -->
+      <div class="council-card">
+        <div class="council-card-header">
+          <div class="council-dot"></div>
+          <div>
+            <div class="council-card-title">Gemini</div>
+            <div class="council-card-role">Nghiên cứu thị trường · Gemini 2.0 Flash</div>
+          </div>
+        </div>
+        <div class="council-chat" id="geminiChat">
+          <% if (geminiHistory.length === 0) { %>
+            <div class="council-msg ai">
+              <div class="council-bubble">Xin chào! Tôi là Gemini, AI nghiên cứu thị trường. Mỗi ngày tôi sẽ báo cáo hướng phát triển cho trang web Fuco AI và xu hướng công nghệ AI mới nhất. Bạn có thể trao đổi với tôi bất cứ lúc nào.</div>
+            </div>
+          <% } else { %>
+            <% geminiHistory.forEach(m => { %>
+              <div class="council-msg <%= m.role === 'user' ? 'user' : 'ai' %>">
+                <% if (m.isSummary || m.isReport) { %>
+                  <div class="council-report-badge"><%= m.isSummary ? '📋 Tổng hợp' : '📊 Báo cáo ngày' %></div>
+                <% } %>
+                <div class="council-bubble"><%= m.content %></div>
+                <div class="council-msg-time"><%= new Date(m.time).toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'}) %></div>
+              </div>
+            <% }) %>
+          <% } %>
+        </div>
+        <div class="council-input-area">
+          <textarea class="council-input" id="geminiInput" rows="2" placeholder="Nhắn tin với Gemini..." onkeydown="handleKey(event, 'gemini-council')"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="sendCouncil('gemini-council')" id="geminiBtn">Gửi</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Scroll xuống cuối khi load
+    document.getElementById('groqChat').scrollTop = 9999;
+    document.getElementById('geminiChat').scrollTop = 9999;
+
+    function handleKey(e, agentId) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendCouncil(agentId);
+      }
+    }
+
+    async function sendCouncil(agentId) {
+      const isGroq = agentId === 'groq-council';
+      const inputEl = document.getElementById(isGroq ? 'groqInput' : 'geminiInput');
+      const chatEl = document.getElementById(isGroq ? 'groqChat' : 'geminiChat');
+      const btnEl = document.getElementById(isGroq ? 'groqBtn' : 'geminiBtn');
+      const msg = inputEl.value.trim();
+      if (!msg) return;
+
+      addCouncilMsg(chatEl, 'user', msg);
+      inputEl.value = '';
+      btnEl.disabled = true;
+
+      const loading = addCouncilLoading(chatEl);
+
+      try {
+        const res = await fetch(`/admin/council/${agentId}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        loading.remove();
+        if (data.ok) {
+          addCouncilMsg(chatEl, 'ai', data.reply);
+        } else {
+          addCouncilMsg(chatEl, 'ai', data.error || 'Có lỗi xảy ra.');
+        }
+      } catch {
+        loading.remove();
+        addCouncilMsg(chatEl, 'ai', 'Không thể kết nối. Vui lòng thử lại.');
+      }
+      btnEl.disabled = false;
+    }
+
+    function addCouncilMsg(chatEl, role, content) {
+      const div = document.createElement('div');
+      div.className = `council-msg ${role}`;
+      const now = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'});
+      div.innerHTML = `
+        <div class="council-bubble">${content.replace(/\n/g, '<br>')}</div>
+        <div class="council-msg-time">${now}</div>
+      `;
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    function addCouncilLoading(chatEl) {
+      const div = document.createElement('div');
+      div.className = 'council-msg ai';
+      div.innerHTML = `
+        <div class="council-bubble">
+          <div class="loading">
+            <div class="loading-dots"><span></span><span></span><span></span></div>
+            Đang suy nghĩ...
+          </div>
+        </div>
+      `;
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return div;
+    }
+  </script>
+</body>
+</html>

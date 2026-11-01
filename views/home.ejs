@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fuco AI</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <a href="/" class="topbar-logo">
+      <svg width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="10" fill="#2563eb"/>
+        <circle cx="18" cy="14" r="5" fill="#fff"/>
+        <circle cx="10" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <circle cx="18" cy="27" r="3.5" fill="#fff" opacity="0.85"/>
+        <circle cx="26" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <line x1="18" y1="19" x2="10" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="18" y2="27" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="26" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+      </svg>
+      Fuco AI
+    </a>
+    <div class="topbar-right">
+      <span class="topbar-username"><%= user.username %></span>
+      <% if (user.role === 'admin') { %>
+        <a href="/admin" class="btn btn-ghost btn-sm">Admin</a>
+      <% } %>
+      <a href="/logout" class="btn btn-ghost btn-sm">Đăng xuất</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-header">
+      <div class="page-title">Team AI của tôi</div>
+      <% if (user.role === 'admin' || user.canCreateTeam) { %>
+        <a href="/teams/create" class="btn btn-primary">+ Tạo team mới</a>
+      <% } %>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-label">Tổng AI hiện có</div>
+        <div class="stat-value"><%= totalAgents %></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Team của tôi</div>
+        <div class="stat-value"><%= teams.length %></div>
+      </div>
+    </div>
+
+    <% if (teams.length === 0) { %>
+      <div class="empty-state">
+        <div class="empty-state-icon">🤖</div>
+        <div class="empty-state-text">Bạn chưa có team AI nào</div>
+        <% if (user.role === 'admin' || user.canCreateTeam) { %>
+          <a href="/teams/create" class="btn btn-primary" style="margin-top:16px">Tạo team đầu tiên</a>
+        <% } else { %>
+          <p style="color:var(--text3);font-size:14px;margin-top:8px">Liên hệ admin để được cấp quyền tạo team</p>
+        <% } %>
+      </div>
+    <% } else { %>
+      <div class="teams-grid">
+        <% teams.forEach(team => { %>
+          <div class="team-card" onclick="location.href='/teams/<%= team._id %>'">
+            <div class="team-card-name"><%= team.name %></div>
+            <div class="team-card-meta"><%= team.members.length %> AI · Tạo <%= new Date(team.createdAt).toLocaleDateString('vi-VN') %></div>
+            <div class="team-card-members">
+              <% team.members.forEach(m => { %>
+                <span class="member-badge <%= m.isLeader ? 'leader' : '' %>">
+                  <%= m.isLeader ? '👑 ' : '' %><%= m.name %>
+                </span>
+              <% }) %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+</body>
+</html>

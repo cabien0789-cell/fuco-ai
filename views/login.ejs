@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập — Fuco AI</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-box">
+      <div class="auth-logo">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="#2563eb"/>
+          <circle cx="18" cy="14" r="5" fill="#fff"/>
+          <circle cx="10" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+          <circle cx="18" cy="27" r="3.5" fill="#fff" opacity="0.85"/>
+          <circle cx="26" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+          <line x1="18" y1="19" x2="10" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+          <line x1="18" y1="19" x2="18" y2="27" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+          <line x1="18" y1="19" x2="26" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        </svg>
+        <span>Fuco AI</span>
+      </div>
+      <div class="auth-title">Đăng nhập</div>
+      <% if (error) { %>
+        <div class="error-msg"><%= error %></div>
+      <% } %>
+      <form method="POST" action="/login">
+        <div class="form-group">
+          <label>Tên đăng nhập hoặc Email</label>
+          <input type="text" name="username" placeholder="Nhập tên đăng nhập hoặc email" required autofocus>
+        </div>
+        <div class="form-group">
+          <label>Mật khẩu</label>
+          <input type="password" name="password" placeholder="Nhập mật khẩu" required>
+        </div>
+        <button type="submit" class="auth-submit">Đăng nhập</button>
+      </form>
+      <div class="auth-link">
+        <a href="/forgot-password">Quên mật khẩu?</a>
+        &nbsp;·&nbsp;
+        <a href="/register">Tạo tài khoản</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

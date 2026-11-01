@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= team.name %> — Fuco AI</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <a href="/" class="topbar-logo">
+      <svg width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="10" fill="#2563eb"/>
+        <circle cx="18" cy="14" r="5" fill="#fff"/>
+        <circle cx="10" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <circle cx="18" cy="27" r="3.5" fill="#fff" opacity="0.85"/>
+        <circle cx="26" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <line x1="18" y1="19" x2="10" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="18" y2="27" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="26" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+      </svg>
+      Fuco AI
+    </a>
+    <div class="topbar-right">
+      <span class="topbar-username"><%= user.username %></span>
+      <% if (user.role === 'admin') { %>
+        <a href="/admin" class="btn btn-ghost btn-sm">Admin</a>
+      <% } %>
+      <a href="/logout" class="btn btn-ghost btn-sm">Đăng xuất</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="team-detail-header">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <a href="/" style="color:var(--text3);font-size:13px">← Quay lại</a>
+          <div class="team-detail-name" style="margin-top:6px"><%= team.name %></div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteTeam()">Xóa team</button>
+      </div>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+      <div class="chat-msg ai">
+        <div class="chat-sender">🤖 Team <%= team.name %></div>
+        <div class="chat-bubble">Xin chào! Tôi là team AI của bạn. Hãy mô tả công việc bạn muốn chúng tôi thực hiện.</div>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chatInput" rows="2" placeholder="Mô tả công việc bạn muốn team AI thực hiện..." onkeydown="handleKey(event)"></textarea>
+      <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">Gửi</button>
+    </div>
+
+    <div class="team-members-panel">
+      <div class="members-title">Thành viên team</div>
+      <% team.members.forEach(m => { %>
+        <div class="member-row">
+          <div class="member-info">
+            <div class="member-name"><%= m.isLeader ? '👑 ' : '' %><%= m.name %></div>
+            <div class="member-meta"><%= m.platform %> · <%= m.group %></div>
+          </div>
+          <span class="badge <%= m.isLeader ? 'badge-admin' : 'badge-user' %>">
+            <%= m.isLeader ? 'Leader' : 'Thành viên' %>
+          </span>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+
+  <script>
+    const teamId = '<%= team._id %>';
+
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const msg = input.value.trim();
+      if (!msg) return;
+
+      addMsg('user', 'Bạn', msg);
+      input.value = '';
+
+      const sendBtn = document.getElementById('sendBtn');
+      sendBtn.disabled = true;
+
+      const loading = addLoading();
+
+      try {
+        const res = await fetch(`/teams/${teamId}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        loading.remove();
+
+        if (data.ok) {
+          addMsg('ai', '🤖 Team', data.result);
+        } else {
+          addMsg('ai', '🤖 Team', data.error || 'Có lỗi xảy ra.');
+        }
+      } catch {
+        loading.remove();
+        addMsg('ai', '🤖 Team', 'Không thể kết nối. Vui lòng thử lại.');
+      }
+
+      sendBtn.disabled = false;
+    }
+
+    function addMsg(role, sender, content) {
+      const area = document.getElementById('chatArea');
+      const div = document.createElement('div');
+      div.className = `chat-msg ${role}`;
+      div.innerHTML = `
+        <div class="chat-sender">${sender}</div>
+        <div class="chat-bubble">${content.replace(/\n/g, '<br>')}</div>
+      `;
+      area.appendChild(div);
+      area.scrollTop = area.scrollHeight;
+      return div;
+    }
+
+    function addLoading() {
+      const area = document.getElementById('chatArea');
+      const div = document.createElement('div');
+      div.className = 'chat-msg ai';
+      div.innerHTML = `
+        <div class="chat-sender">🤖 Team</div>
+        <div class="chat-bubble">
+          <div class="loading">
+            <div class="loading-dots"><span></span><span></span><span></span></div>
+            Đang xử lý...
+          </div>
+        </div>
+      `;
+      area.appendChild(div);
+      area.scrollTop = area.scrollHeight;
+      return div;
+    }
+
+    async function deleteTeam() {
+      if (!confirm('Bạn có chắc muốn xóa team này không?')) return;
+      const res = await fetch(`/teams/${teamId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) location.href = '/';
+    }
+  </script>
+</body>
+</html>

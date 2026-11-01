@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tạo team AI — Fuco AI</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <a href="/" class="topbar-logo">
+      <svg width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="10" fill="#2563eb"/>
+        <circle cx="18" cy="14" r="5" fill="#fff"/>
+        <circle cx="10" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <circle cx="18" cy="27" r="3.5" fill="#fff" opacity="0.85"/>
+        <circle cx="26" cy="24" r="3.5" fill="#fff" opacity="0.7"/>
+        <line x1="18" y1="19" x2="10" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="18" y2="27" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+        <line x1="18" y1="19" x2="26" y2="24" stroke="#fff" stroke-width="1.2" opacity="0.5"/>
+      </svg>
+      Fuco AI
+    </a>
+    <div class="topbar-right">
+      <span class="topbar-username"><%= user.username %></span>
+      <% if (user.role === 'admin') { %>
+        <a href="/admin" class="btn btn-ghost btn-sm">Admin</a>
+      <% } %>
+      <a href="/logout" class="btn btn-ghost btn-sm">Đăng xuất</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-header">
+      <div class="page-title">Tạo team AI</div>
+      <a href="/" class="btn btn-ghost btn-sm">← Quay lại</a>
+    </div>
+
+    <% if (error) { %>
+      <div class="error-msg"><%= error %></div>
+    <% } %>
+
+    <div class="create-team-layout">
+      <div class="agents-section">
+        <div class="group-tab-list">
+          <div class="group-tab active" onclick="filterGroup('all', this)">Tất cả</div>
+          <% groups.forEach(g => { %>
+            <div class="group-tab" onclick="filterGroup('<%= g %>', this)"><%= g %></div>
+          <% }) %>
+        </div>
+
+        <% if (agents.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-state-icon">🤖</div>
+            <div class="empty-state-text">Chưa có AI nào trong hệ thống</div>
+          </div>
+        <% } else { %>
+          <div class="agents-grid" id="agentsGrid">
+            <% agents.forEach(agent => { %>
+              <div class="agent-card" data-id="<%= agent._id %>" data-group="<%= agent.group %>" onclick="toggleAgent(this)">
+                <div class="agent-card-name"><%= agent.name %></div>
+                <div class="agent-card-platform"><%= agent.platform %> · <%= agent.group %></div>
+                <div class="agent-card-desc"><%= agent.description %></div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="team-builder">
+        <div class="team-builder-title">🛠 Team của bạn</div>
+        <input type="text" class="team-name-input" id="teamName" placeholder="Tên team...">
+        <div class="selected-list" id="selectedList">
+          <p style="color:var(--text3);font-size:13px">Chọn AI bên trái để thêm vào team</p>
+        </div>
+        <% if (user.role !== 'admin') { %>
+          <div class="team-limit-note">Tối đa 4 AI trong 1 team</div>
+        <% } %>
+        <button class="btn btn-primary" style="width:100%" onclick="createTeam()">Tạo team</button>
+        <div id="createMsg" style="margin-top:10px;font-size:13px;color:var(--red);display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const isAdmin = <%= user.role === 'admin' %>;
+    const MAX_MEMBERS = 4;
+    let selected = []; // {id, name, isLeader}
+    let leaderId = null;
+
+    function filterGroup(group, el) {
+      document.querySelectorAll('.group-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.querySelectorAll('.agent-card').forEach(card => {
+        if (group === 'all' || card.dataset.group === group) {
+          card.style.display = '';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    function toggleAgent(card) {
+      const id = card.dataset.id;
+      const name = card.querySelector('.agent-card-name').textContent;
+
+      if (selected.find(s => s.id === id)) {
+        // Bỏ chọn
+        if (leaderId === id) leaderId = null;
+        selected = selected.filter(s => s.id !== id);
+        card.classList.remove('selected', 'leader-selected');
+        card.querySelector('.agent-card-badge')?.remove();
+      } else {
+        if (!isAdmin && selected.length >= MAX_MEMBERS) {
+          showMsg('Tối đa 4 AI trong 1 team.');
+          return;
+        }
+        selected.push({ id, name });
+        card.classList.add('selected');
+      }
+      renderSelected();
+    }
+
+    function setLeader(id) {
+      // Bỏ leader cũ
+      if (leaderId) {
+        const oldCard = document.querySelector(`.agent-card[data-id="${leaderId}"]`);
+        if (oldCard) {
+          oldCard.classList.remove('leader-selected');
+          oldCard.classList.add('selected');
+          oldCard.querySelector('.agent-card-badge')?.remove();
+        }
+      }
+      leaderId = id;
+      const card = document.querySelector(`.agent-card[data-id="${id}"]`);
+      if (card) {
+        card.classList.remove('selected');
+        card.classList.add('leader-selected');
+        let badge = card.querySelector('.agent-card-badge');
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.className = 'agent-card-badge badge-leader';
+          card.appendChild(badge);
+        }
+        badge.textContent = 'Leader';
+      }
+      renderSelected();
+    }
+
+    function renderSelected() {
+      const list = document.getElementById('selectedList');
+      if (selected.length === 0) {
+        list.innerHTML = '<p style="color:var(--text3);font-size:13px">Chọn AI bên trái để thêm vào team</p>';
+        return;
+      }
+      list.innerHTML = selected.map(s => `
+        <div class="selected-item">
+          <div>
+            <div class="selected-item-name">${s.name}</div>
+            <div class="selected-item-role">${s.id === leaderId ? '👑 Leader' : 'Thành viên'}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${s.id !== leaderId ? `<button class="btn btn-ghost btn-sm" onclick="setLeader('${s.id}')">Leader</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function createTeam() {
+      const name = document.getElementById('teamName').value.trim();
+      if (!name) { showMsg('Vui lòng nhập tên team.'); return; }
+      if (selected.length === 0) { showMsg('Vui lòng chọn ít nhất 1 AI.'); return; }
+      if (!leaderId) { showMsg('Vui lòng chọn leader cho team.'); return; }
+
+      const btn = document.querySelector('.team-builder .btn-primary');
+      btn.disabled = true;
+      btn.textContent = 'Đang tạo...';
+
+      const res = await fetch('/teams/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, memberIds: selected.map(s => s.id), leaderId })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        location.href = '/';
+      } else {
+        showMsg(data.error || 'Có lỗi xảy ra.');
+        btn.disabled = false;
+        btn.textContent = 'Tạo team';
+      }
+    }
+
+    function showMsg(msg) {
+      const el = document.getElementById('createMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 4000);
+    }
+  </script>
+</body>
+</html>
