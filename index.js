@@ -1,3 +1,6 @@
+// run `node index.js` in the terminal
+
+console.log(`Hello Node.js v${process.versions.node}!`);
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
@@ -98,11 +101,7 @@ async function sendEmail(to, subject, html) {
       htmlContent: html
     })
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error('Brevo error: ' + err);
-  }
-  return true;
+  return res.ok;
 }
 
 // Email rate limit check (DB)
@@ -148,7 +147,7 @@ app.get('/register', (req, res) => {
   res.render('register', { error: null });
 });
 
-// POST /register — gửi email TRƯỚC, lưu DB SAU
+// POST /register
 app.post('/register', emailLimiter, async (req, res) => {
   const { username, email, password } = req.body;
   try {
@@ -156,12 +155,7 @@ app.post('/register', emailLimiter, async (req, res) => {
     if (password.length < 6) return res.render('register', { error: 'Mật khẩu phải có ít nhất 6 ký tự.' });
 
     const existing = await db.collection('users').findOne({ $or: [{ username }, { email }] });
-    if (existing && existing.verified) return res.render('register', { error: 'Tên đăng nhập hoặc email đã tồn tại.' });
-
-    // Nếu đã có tài khoản chưa verify thì xóa đi để đăng ký lại
-    if (existing && !existing.verified) {
-      await db.collection('users').deleteOne({ _id: existing._id });
-    }
+    if (existing) return res.render('register', { error: 'Tên đăng nhập hoặc email đã tồn tại.' });
 
     const canSend = await checkEmailRateLimit(email);
     if (!canSend) return res.render('register', { error: 'Email này đã được gửi quá nhiều lần. Vui lòng thử lại sau 1 giờ.' });
@@ -170,26 +164,6 @@ app.post('/register', emailLimiter, async (req, res) => {
     const verifyToken = Math.random().toString(36).substring(2, 8).toUpperCase();
     const isAdmin = ADMIN_EMAILS.includes(email);
 
-    const emailHtml = `
-      <div style="background:#f0f4ff;padding:40px 0;font-family:sans-serif">
-        <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden">
-          <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:32px;text-align:center">
-            <h1 style="color:#fff;margin:0;font-size:24px">Fuco AI</h1>
-          </div>
-          <div style="padding:32px">
-            <h2 style="color:#1e293b;margin:0 0 16px">Xác thực tài khoản</h2>
-            <p style="color:#64748b">Mã xác thực của bạn là:</p>
-            <div style="background:#eff6ff;border:2px solid #2563eb;border-radius:8px;padding:20px;text-align:center;font-size:32px;font-weight:bold;color:#2563eb;letter-spacing:8px">${verifyToken}</div>
-            <p style="color:#64748b;font-size:14px;margin-top:16px">Mã có hiệu lực trong 24 giờ.</p>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Gửi email TRƯỚC
-    await sendEmail(email, 'Xác thực tài khoản Fuco AI', emailHtml);
-
-    // Gửi thành công mới lưu vào DB
     await db.collection('users').insertOne({
       username,
       email,
@@ -204,10 +178,26 @@ app.post('/register', emailLimiter, async (req, res) => {
     });
 
     await recordEmailSent(email);
+    await sendEmail(email, 'Xác thực tài khoản Fuco AI', `
+      <div style="background:#f0f4ff;padding:40px 0;font-family:sans-serif">
+        <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden">
+          <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:32px;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:24px">Fuco AI</h1>
+          </div>
+          <div style="padding:32px">
+            <h2 style="color:#1e293b;margin:0 0 16px">Xác thực tài khoản</h2>
+            <p style="color:#64748b">Mã xác thực của bạn là:</p>
+            <div style="background:#eff6ff;border:2px solid #2563eb;border-radius:8px;padding:20px;text-align:center;font-size:32px;font-weight:bold;color:#2563eb;letter-spacing:8px">${verifyToken}</div>
+            <p style="color:#64748b;font-size:14px;margin-top:16px">Mã có hiệu lực trong 24 giờ.</p>
+          </div>
+        </div>
+      </div>
+    `);
+
     res.redirect(`/verify?email=${encodeURIComponent(email)}`);
   } catch (e) {
     if (e.code === 11000) return res.render('register', { error: 'Tên đăng nhập hoặc email đã tồn tại.' });
-    res.render('register', { error: 'Không thể gửi email xác thực. Vui lòng thử lại sau.' });
+    res.render('register', { error: 'Có lỗi xảy ra, vui lòng thử lại.' });
   }
 });
 
@@ -246,8 +236,9 @@ app.post('/forgot-password', emailLimiter, async (req, res) => {
 
     const resetToken = Math.random().toString(36).substring(2, 8).toUpperCase();
     const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
-
-    const emailHtml = `
+    await db.collection('users').updateOne({ _id: user._id }, { $set: { resetToken, resetExpires } });
+    await recordEmailSent(email);
+    await sendEmail(email, 'Đặt lại mật khẩu Fuco AI', `
       <div style="background:#f0f4ff;padding:40px 0;font-family:sans-serif">
         <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden">
           <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:32px;text-align:center">
@@ -261,11 +252,7 @@ app.post('/forgot-password', emailLimiter, async (req, res) => {
           </div>
         </div>
       </div>
-    `;
-
-    await sendEmail(email, 'Đặt lại mật khẩu Fuco AI', emailHtml);
-    await db.collection('users').updateOne({ _id: user._id }, { $set: { resetToken, resetExpires } });
-    await recordEmailSent(email);
+    `);
     res.render('forgot-password', { error: null, success: 'Mã đặt lại mật khẩu đã được gửi đến email của bạn.' });
   } catch {
     res.render('forgot-password', { error: 'Có lỗi xảy ra, vui lòng thử lại.', success: null });
@@ -300,6 +287,7 @@ app.get('/logout', (req, res) => {
 
 // ==================== TRANG CHỦ ====================
 
+// GET /
 app.get('/', requireLogin, async (req, res) => {
   try {
     const [teams, agents] = await Promise.all([
@@ -314,6 +302,7 @@ app.get('/', requireLogin, async (req, res) => {
 
 // ==================== TEAM ====================
 
+// GET /teams/create
 app.get('/teams/create', requireLogin, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && !req.user.canCreateTeam) return res.redirect('/');
@@ -325,17 +314,23 @@ app.get('/teams/create', requireLogin, async (req, res) => {
   }
 });
 
+// POST /teams/create
 app.post('/teams/create', requireLogin, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && !req.user.canCreateTeam) return res.json({ ok: false, error: 'Bạn chưa được cấp quyền tạo team.' });
+
     const { name, memberIds, leaderId } = req.body;
     const ids = Array.isArray(memberIds) ? memberIds : [memberIds];
+
     if (req.user.role !== 'admin' && ids.length > 4) return res.json({ ok: false, error: 'Tối đa 4 AI trong một team.' });
+
     if (req.user.role !== 'admin') {
       const teamCount = await db.collection('teams').countDocuments({ owner: req.user.username });
       if (teamCount >= req.user.teamLimit) return res.json({ ok: false, error: `Bạn đã đạt giới hạn ${req.user.teamLimit} team.` });
     }
+
     if (!leaderId || !ids.includes(leaderId)) return res.json({ ok: false, error: 'Vui lòng chỉ định leader.' });
+
     const agents = await db.collection('aiAgents').find({ _id: { $in: ids.map(id => new ObjectId(id)) } }).toArray();
     const members = agents.map(a => ({
       agentId: a._id.toString(),
@@ -344,13 +339,21 @@ app.post('/teams/create', requireLogin, async (req, res) => {
       group: a.group,
       isLeader: a._id.toString() === leaderId
     }));
-    await db.collection('teams').insertOne({ name, owner: req.user.username, members, createdAt: new Date() });
+
+    await db.collection('teams').insertOne({
+      name,
+      owner: req.user.username,
+      members,
+      createdAt: new Date()
+    });
+
     res.json({ ok: true });
   } catch {
     res.json({ ok: false, error: 'Có lỗi xảy ra, vui lòng thử lại.' });
   }
 });
 
+// GET /teams/:id
 app.get('/teams/:id', requireLogin, async (req, res) => {
   try {
     const team = await db.collection('teams').findOne({ _id: new ObjectId(req.params.id) });
@@ -362,6 +365,7 @@ app.get('/teams/:id', requireLogin, async (req, res) => {
   }
 });
 
+// DELETE /teams/:id
 app.delete('/teams/:id', requireLogin, async (req, res) => {
   try {
     const team = await db.collection('teams').findOne({ _id: new ObjectId(req.params.id) });
@@ -374,6 +378,7 @@ app.delete('/teams/:id', requireLogin, async (req, res) => {
   }
 });
 
+// POST /teams/:id/chat — người dùng gửi yêu cầu cho team
 app.post('/teams/:id/chat', requireLogin, async (req, res) => {
   try {
     const team = await db.collection('teams').findOne({ _id: new ObjectId(req.params.id) });
@@ -384,21 +389,51 @@ app.post('/teams/:id/chat', requireLogin, async (req, res) => {
     const leader = team.members.find(m => m.isLeader);
     const members = team.members.filter(m => !m.isLeader);
 
+    // Lấy thông tin agent leader
     const leaderAgent = await db.collection('aiAgents').findOne({ _id: new ObjectId(leader.agentId) });
     if (!leaderAgent) return res.json({ ok: false, error: 'Leader AI không tồn tại.' });
 
-    const leaderEval = await callAI(leaderAgent, `Bạn là ${leaderAgent.name}, leader của team AI. Nhiệm vụ:\n1. Đánh giá yêu cầu sau có khả thi không\n2. Nếu khả thi, phân công nhiệm vụ cho từng thành viên: ${members.map(m => m.name).join(', ')}\n3. Nếu không khả thi, giải thích lý do\n\nYêu cầu: ${message}\n\nFormat:\nĐÁNH GIÁ: [khả thi/không khả thi]\nLÝ DO: [nếu không khả thi]\nPHÂN CÔNG:\n- [tên]: [nhiệm vụ]`);
+    // Leader đánh giá yêu cầu và phân công
+    const leaderEval = await callAI(leaderAgent, `
+Bạn là ${leaderAgent.name}, leader của team AI. Nhiệm vụ của bạn:
+1. Đánh giá yêu cầu sau có khả thi không
+2. Nếu khả thi, phân công nhiệm vụ cụ thể cho từng thành viên: ${members.map(m => m.name).join(', ')}
+3. Nếu không khả thi, giải thích lý do
 
-    if (leaderEval.includes('không khả thi')) return res.json({ ok: true, result: leaderEval });
+Yêu cầu: ${message}
 
+Trả lời theo format:
+ĐÁNH GIÁ: [khả thi/không khả thi]
+LÝ DO: [nếu không khả thi]
+PHÂN CÔNG:
+- [tên thành viên]: [nhiệm vụ cụ thể]
+    `);
+
+    if (leaderEval.includes('không khả thi')) {
+      return res.json({ ok: true, result: leaderEval });
+    }
+
+    // Các thành viên thực hiện nhiệm vụ song song
     const memberResults = await Promise.all(members.map(async (member) => {
       const memberAgent = await db.collection('aiAgents').findOne({ _id: new ObjectId(member.agentId) });
       if (!memberAgent) return { name: member.name, result: 'Agent không khả dụng.' };
-      const result = await callAI(memberAgent, `Bạn là ${memberAgent.name}, thành viên team AI.\nYêu cầu gốc: ${message}\nNhiệm vụ của bạn: ${extractTask(leaderEval, member.name)}\nHãy thực hiện và trả kết quả chi tiết.`);
+      const result = await callAI(memberAgent, `
+Bạn là ${memberAgent.name}, thành viên của team AI. 
+Yêu cầu gốc của người dùng: ${message}
+Nhiệm vụ của bạn (được leader phân công): ${extractTask(leaderEval, member.name)}
+Hãy thực hiện nhiệm vụ và trả về kết quả chi tiết.
+      `);
       return { name: member.name, result };
     }));
 
-    const summary = await callAI(leaderAgent, `Bạn là ${leaderAgent.name}, leader team AI.\nYêu cầu gốc: ${message}\nKết quả từ thành viên:\n${memberResults.map(r => `${r.name}: ${r.result}`).join('\n\n')}\nTổng hợp thành kết quả hoàn chỉnh cho người dùng.`);
+    // Leader tổng hợp kết quả
+    const summary = await callAI(leaderAgent, `
+Bạn là ${leaderAgent.name}, leader của team AI.
+Yêu cầu gốc của người dùng: ${message}
+Kết quả từ các thành viên:
+${memberResults.map(r => `${r.name}: ${r.result}`).join('\n\n')}
+Hãy tổng hợp thành một kết quả hoàn chỉnh, rõ ràng và hữu ích nhất cho người dùng.
+    `);
 
     res.json({ ok: true, result: summary, details: memberResults });
   } catch {
@@ -406,6 +441,7 @@ app.post('/teams/:id/chat', requireLogin, async (req, res) => {
   }
 });
 
+// Hàm gọi AI theo platform
 async function callAI(agent, prompt) {
   try {
     if (agent.platform === 'Groq') {
@@ -449,6 +485,7 @@ function extractTask(leaderEval, memberName) {
 
 // ==================== ADMIN ====================
 
+// GET /admin
 app.get('/admin', requireAdmin, async (req, res) => {
   try {
     const [users, agents, teams] = await Promise.all([
@@ -462,6 +499,7 @@ app.get('/admin', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/users/:id/toggle-lock
 app.post('/admin/users/:id/toggle-lock', requireAdmin, async (req, res) => {
   try {
     const user = await db.collection('users').findOne({ _id: new ObjectId(req.params.id) });
@@ -473,6 +511,7 @@ app.post('/admin/users/:id/toggle-lock', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/users/:id/toggle-team
 app.post('/admin/users/:id/toggle-team', requireAdmin, async (req, res) => {
   try {
     const user = await db.collection('users').findOne({ _id: new ObjectId(req.params.id) });
@@ -484,6 +523,7 @@ app.post('/admin/users/:id/toggle-team', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/users/:id/set-team-limit
 app.post('/admin/users/:id/set-team-limit', requireAdmin, async (req, res) => {
   try {
     const { limit } = req.body;
@@ -494,18 +534,33 @@ app.post('/admin/users/:id/set-team-limit', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/agents — thêm AI nhân viên mới
 app.post('/admin/agents', requireAdmin, async (req, res) => {
   try {
     const { platform, apiKey, model, group, description } = req.body;
+
+    // Groq đặt tên bằng AI
     const nameAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' };
     const name = await callAI(nameAgent, `Đặt một tên tiếng Anh ngắn gọn, sáng tạo và chuyên nghiệp cho một AI agent thuộc nhóm "${group}" với mô tả: "${description}". Chỉ trả về tên, không giải thích.`);
-    await db.collection('aiAgents').insertOne({ name: name.trim(), platform, apiKey, model, group, description, role: 'employee', status: 'active', addedAt: new Date() });
+
+    await db.collection('aiAgents').insertOne({
+      name: name.trim(),
+      platform,
+      apiKey,
+      model,
+      group,
+      description,
+      role: 'employee',
+      status: 'active',
+      addedAt: new Date()
+    });
     res.json({ ok: true, name: name.trim() });
   } catch {
     res.json({ ok: false });
   }
 });
 
+// DELETE /admin/agents/:id
 app.delete('/admin/agents/:id', requireAdmin, async (req, res) => {
   try {
     await db.collection('aiAgents').deleteOne({ _id: new ObjectId(req.params.id) });
@@ -515,6 +570,7 @@ app.delete('/admin/agents/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// DELETE /admin/teams/:id
 app.delete('/admin/teams/:id', requireAdmin, async (req, res) => {
   try {
     await db.collection('teams').deleteOne({ _id: new ObjectId(req.params.id) });
@@ -524,8 +580,9 @@ app.delete('/admin/teams/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// ==================== COUNCIL ====================
+// ==================== ADMIN CHAT VỚI AI QUẢN LÝ ====================
 
+// GET /admin/council
 app.get('/admin/council', requireAdmin, async (req, res) => {
   try {
     const [groqHistory, geminiHistory] = await Promise.all([
@@ -538,10 +595,12 @@ app.get('/admin/council', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/council/:agentId/chat
 app.post('/admin/council/:agentId/chat', requireAdmin, async (req, res) => {
   try {
     const { agentId } = req.params;
     const { message } = req.body;
+
     const isGroq = agentId === 'groq-council';
     const agent = {
       platform: isGroq ? 'Groq' : 'Gemini',
@@ -549,16 +608,26 @@ app.post('/admin/council/:agentId/chat', requireAdmin, async (req, res) => {
       model: isGroq ? 'llama-3.3-70b-versatile' : 'gemini-2.0-flash',
       name: isGroq ? 'Groq' : 'Gemini'
     };
+
     const history = await db.collection('chatHistory').findOne({ agentId });
     const messages = history?.messages || [];
+
     const systemContext = isGroq
-      ? 'Bạn là Groq, AI trinh sát nhân sự của Fuco AI. Nhiệm vụ: tìm kiếm các AI có API miễn phí tiềm năng và báo cáo cho admin.'
-      : 'Bạn là Gemini, AI nghiên cứu thị trường của Fuco AI. Nhiệm vụ: báo cáo hướng phát triển trang web Fuco AI và xu hướng công nghệ AI.';
-    const fullPrompt = `${systemContext}\n\nLịch sử:\n${messages.map(m => `${m.role === 'user' ? 'Admin' : agent.name}: ${m.content}`).join('\n')}\n\nAdmin: ${message}`;
+      ? 'Bạn là Groq, AI trinh sát nhân sự của hệ thống Fuco AI. Nhiệm vụ của bạn là tìm kiếm các AI có API miễn phí tiềm năng và báo cáo cho admin.'
+      : 'Bạn là Gemini, AI nghiên cứu thị trường của hệ thống Fuco AI. Nhiệm vụ của bạn là báo cáo hướng phát triển cho trang web Fuco AI và xu hướng công nghệ AI.';
+
+    const fullPrompt = `${systemContext}\n\nLịch sử trao đổi:\n${messages.map(m => `${m.role === 'user' ? 'Admin' : agent.name}: ${m.content}`).join('\n')}\n\nAdmin: ${message}`;
     const reply = await callAI(agent, fullPrompt);
+
     messages.push({ role: 'user', content: message, time: new Date() });
     messages.push({ role: 'assistant', content: reply, time: new Date() });
-    await db.collection('chatHistory').updateOne({ agentId }, { $set: { agentId, messages, updatedAt: new Date() } }, { upsert: true });
+
+    await db.collection('chatHistory').updateOne(
+      { agentId },
+      { $set: { agentId, messages, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
     res.json({ ok: true, reply });
   } catch {
     res.json({ ok: false, error: 'Có lỗi xảy ra.' });
@@ -566,6 +635,20 @@ app.post('/admin/council/:agentId/chat', requireAdmin, async (req, res) => {
 });
 
 // ==================== DAILY JOBS ====================
+
+// Kiểm tra AI quản lý mỗi ngày lúc 6 giờ sáng
+async function dailyCouncilCheck() {
+  try {
+    // Kiểm tra Groq
+    const groqOk = await testAI({ platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' });
+    // Kiểm tra Gemini
+    const geminiOk = await testAI({ platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' });
+
+    console.log(`[Daily Check] Groq: ${groqOk ? 'OK' : 'FAIL'} | Gemini: ${geminiOk ? 'OK' : 'FAIL'}`);
+  } catch (e) {
+    console.error('[Daily Check Error]', e);
+  }
+}
 
 async function testAI(agent) {
   try {
@@ -576,33 +659,44 @@ async function testAI(agent) {
   }
 }
 
-async function dailyCouncilCheck() {
-  try {
-    const groqOk = await testAI({ platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' });
-    const geminiOk = await testAI({ platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' });
-    console.log(`[Daily Check] Groq: ${groqOk ? 'OK' : 'FAIL'} | Gemini: ${geminiOk ? 'OK' : 'FAIL'}`);
-  } catch (e) {
-    console.error('[Daily Check Error]', e);
-  }
-}
-
+// Daily report từ 2 con AI quản lý
 async function dailyReport() {
   try {
-    const groqAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' };
-    const geminiAgent = { platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' };
+    const groqAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile', name: 'Groq' };
+    const geminiAgent = { platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash', name: 'Gemini' };
+
     const today = new Date().toLocaleDateString('vi-VN');
-    const groqReport = await callAI(groqAgent, `Hôm nay ${today}, hãy tìm và liệt kê 5-10 AI platform có API miễn phí tiềm năng để kết nối vào Fuco AI. Bao gồm: tên, model miễn phí, giới hạn token, link đăng ký, đánh giá tiềm năng.`);
-    const geminiReport = await callAI(geminiAgent, `Hôm nay ${today}, báo cáo:\n1. HƯỚNG PHÁT TRIỂN FUCO AI: 3-5 tính năng nên làm tiếp\n2. XU HƯỚNG CÔNG NGHỆ AI: Trends nổi bật và ý tưởng ứng dụng vào web, app, sản phẩm công nghệ`);
+
+    // Groq tìm AI mới
+    const groqReport = await callAI(groqAgent, `Hôm nay ${today}, hãy tìm kiếm và liệt kê 5-10 AI platform có API miễn phí tiềm năng để kết nối vào hệ thống Fuco AI. Bao gồm: tên platform, model miễn phí, giới hạn token miễn phí, link đăng ký, đánh giá tiềm năng.`);
+
+    // Gemini báo cáo thị trường
+    const geminiReport = await callAI(geminiAgent, `Hôm nay ${today}, hãy báo cáo:\n1. HƯỚNG PHÁT TRIỂN TRANG WEB FUCO AI: 3-5 tính năng hoặc cải tiến nên làm tiếp theo\n2. XU HƯỚNG CÔNG NGHỆ AI: Những trend AI nổi bật hiện nay và ý tưởng ứng dụng vào web, app, sản phẩm công nghệ`);
+
+    // Lưu báo cáo vào lịch sử chat
+    const reportMessage = { role: 'assistant', content: groqReport, time: new Date(), isReport: true };
+    const geminiReportMessage = { role: 'assistant', content: geminiReport, time: new Date(), isReport: true };
+
     await Promise.all([
-      db.collection('chatHistory').updateOne({ agentId: 'groq-council' }, { $push: { messages: { role: 'assistant', content: groqReport, time: new Date(), isReport: true } }, $set: { updatedAt: new Date() } }, { upsert: true }),
-      db.collection('chatHistory').updateOne({ agentId: 'gemini-council' }, { $push: { messages: { role: 'assistant', content: geminiReport, time: new Date(), isReport: true } }, $set: { updatedAt: new Date() } }, { upsert: true })
+      db.collection('chatHistory').updateOne(
+        { agentId: 'groq-council' },
+        { $push: { messages: reportMessage }, $set: { updatedAt: new Date() } },
+        { upsert: true }
+      ),
+      db.collection('chatHistory').updateOne(
+        { agentId: 'gemini-council' },
+        { $push: { messages: geminiReportMessage }, $set: { updatedAt: new Date() } },
+        { upsert: true }
+      )
     ]);
-    console.log('[Daily Report] Xong ngày', today);
+
+    console.log('[Daily Report] Đã gửi báo cáo ngày', today);
   } catch (e) {
     console.error('[Daily Report Error]', e);
   }
 }
 
+// Xóa chat cũ và tổng hợp lúc 5:30 sáng mỗi ngày
 async function dailySummaryAndClear() {
   try {
     const agents = ['groq-council', 'gemini-council'];
@@ -611,19 +705,26 @@ async function dailySummaryAndClear() {
       'groq-council': { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' },
       'gemini-council': { platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' }
     };
+
     for (const agentId of agents) {
       const history = await db.collection('chatHistory').findOne({ agentId });
       if (!history || !history.messages || history.messages.length === 0) continue;
+
       const oldMessages = history.messages.map(m => `${m.role === 'user' ? 'Admin' : agentNames[agentId]}: ${m.content}`).join('\n');
-      const summary = await callAI(agentConfigs[agentId], `Tóm tắt những việc quan trọng chưa hoàn thành hoặc cần theo dõi từ lịch sử chat:\n\n${oldMessages}\n\nChỉ liệt kê việc còn cần làm, bỏ việc đã xong.`);
-      await db.collection('chatHistory').updateOne({ agentId }, { $set: { messages: [{ role: 'assistant', content: `📋 TỔNG HỢP VIỆC CÒN CẦN LÀM:\n\n${summary}`, time: new Date(), isSummary: true }], updatedAt: new Date() } });
+      const summary = await callAI(agentConfigs[agentId], `Tóm tắt những việc quan trọng chưa hoàn thành hoặc cần theo dõi từ lịch sử chat sau:\n\n${oldMessages}\n\nChỉ liệt kê những việc còn cần làm, bỏ qua những việc đã hoàn thành.`);
+
+      await db.collection('chatHistory').updateOne(
+        { agentId },
+        { $set: { messages: [{ role: 'assistant', content: `📋 TỔNG HỢP VIỆC CÒN CẦN LÀM:\n\n${summary}`, time: new Date(), isSummary: true }], updatedAt: new Date() } }
+      );
     }
-    console.log('[Daily Summary] Xong');
+    console.log('[Daily Summary] Đã tổng hợp và xóa chat cũ');
   } catch (e) {
     console.error('[Daily Summary Error]', e);
   }
 }
 
+// Scheduler đơn giản không dùng thư viện ngoài
 function startScheduler() {
   setInterval(async () => {
     const now = new Date();
