@@ -85,6 +85,9 @@ const ADMIN_EMAILS = ['cabien0789@gmail.com', 'tuannreal01@gmail.com'];
 
 // Brevo send email
 async function sendEmail(to, subject, html) {
+  console.log('[Brevo] Sending email to:', to);
+  console.log('[Brevo] GMAIL_USER:', process.env.GMAIL_USER);
+  console.log('[Brevo] API KEY exists:', !!process.env.BREVO_API_KEY);
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -98,9 +101,11 @@ async function sendEmail(to, subject, html) {
       htmlContent: html
     })
   });
+  const responseText = await res.text();
+  console.log('[Brevo] Status:', res.status);
+  console.log('[Brevo] Response:', responseText);
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error('Brevo error: ' + err);
+    throw new Error('Brevo error: ' + responseText);
   }
   return true;
 }
