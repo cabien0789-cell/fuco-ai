@@ -418,9 +418,17 @@ async function callAI(agent, prompt) {
       return data.choices?.[0]?.message?.content || 'Không có phản hồi.';
     }
     if (agent.platform === 'Gemini') {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${agent.model || 'gemini-2.0-flash'}:generateContent?key=${agent.apiKey}`, {
+      const model = agent.model || 'gemini-2.0-flash';
+      const isOAuth = agent.apiKey && agent.apiKey.startsWith('AQ.');
+      const url = isOAuth
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+        : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${agent.apiKey}`;
+      const headers = isOAuth
+        ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agent.apiKey}` }
+        : { 'Content-Type': 'application/json' };
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
       const data = await res.json();
