@@ -563,7 +563,9 @@ app.post('/admin/council/:agentId/chat', requireAdmin, async (req, res) => {
       ? 'Bạn là Groq, AI trinh sát nhân sự của Fuco AI. Nhiệm vụ: tìm kiếm các AI có API miễn phí tiềm năng và báo cáo cho admin.'
       : 'Bạn là Gemini, AI nghiên cứu thị trường của Fuco AI. Nhiệm vụ: báo cáo hướng phát triển trang web Fuco AI và xu hướng công nghệ AI.';
     const fullPrompt = `${systemContext}\n\nLịch sử:\n${messages.map(m => `${m.role === 'user' ? 'Admin' : agent.name}: ${m.content}`).join('\n')}\n\nAdmin: ${message}`;
+    console.log(`[Council] Calling ${agentId}, platform: ${agent.platform}, key exists: ${!!agent.apiKey}`);
     const reply = await callAI(agent, fullPrompt);
+    console.log(`[Council] Reply from ${agentId}:`, reply?.substring(0, 100));
     messages.push({ role: 'user', content: message, time: new Date() });
     messages.push({ role: 'assistant', content: reply, time: new Date() });
     await db.collection('chatHistory').updateOne({ agentId }, { $set: { agentId, messages, updatedAt: new Date() } }, { upsert: true });
