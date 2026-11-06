@@ -415,6 +415,7 @@ async function callAI(agent, prompt) {
         body: JSON.stringify({ model: agent.model || 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 2000 })
       });
       const data = await res.json();
+      console.log('[Groq] status:', res.status, 'data:', JSON.stringify(data).substring(0, 300));
       return data.choices?.[0]?.message?.content || 'Không có phản hồi.';
     }
     if (agent.platform === 'Gemini') {
@@ -432,6 +433,7 @@ async function callAI(agent, prompt) {
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
       const data = await res.json();
+      console.log('[Gemini] status:', res.status, 'data:', JSON.stringify(data).substring(0, 300));
       return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có phản hồi.';
     }
     if (agent.platform === 'OpenRouter') {
