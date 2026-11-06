@@ -102,16 +102,7 @@
       <div class="add-agent-form">
         <div class="add-agent-title">Thêm AI nhân viên mới</div>
         <div class="form-row">
-          <select id="agentPlatform">
-            <option value="" disabled selected>-- Chọn nền tảng --</option>
-            <option value="Groq">Groq</option>
-            <option value="Gemini">Gemini</option>
-            <option value="OpenRouter">OpenRouter</option>
-            <option value="Together AI">Together AI</option>
-            <option value="Cohere">Cohere</option>
-            <option value="Mistral">Mistral</option>
-            <option value="Cerebras">Cerebras</option>
-          </select>
+          <input type="text" id="agentPlatform" placeholder="Tên nền tảng (vd: Groq, Gemini...)">
           <input type="text" id="agentModel" placeholder="Tên model (vd: llama-3.3-70b-versatile)">
           <input type="text" id="agentApiKey" placeholder="API Key">
           <select id="agentGroup">
