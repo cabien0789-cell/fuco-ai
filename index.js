@@ -412,7 +412,7 @@ async function callAI(agent, prompt) {
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${agent.apiKey}` },
-        body: JSON.stringify({ model: agent.model || 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 2000 })
+        body: JSON.stringify({ model: agent.model || 'llama3-70b-8192', messages: [{ role: 'user', content: prompt }], max_tokens: 2000 })
       });
       const data = await res.json();
       console.log('[Groq] status:', res.status, 'data:', JSON.stringify(data).substring(0, 300));
@@ -507,7 +507,7 @@ app.post('/admin/users/:id/set-team-limit', requireAdmin, async (req, res) => {
 app.post('/admin/agents', requireAdmin, async (req, res) => {
   try {
     const { platform, apiKey, model, group, description } = req.body;
-    const nameAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' };
+    const nameAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama3-70b-8192' };
     const name = await callAI(nameAgent, `Đặt một tên tiếng Anh ngắn gọn, sáng tạo và chuyên nghiệp cho một AI agent thuộc nhóm "${group}" với mô tả: "${description}". Chỉ trả về tên, không giải thích.`);
     await db.collection('aiAgents').insertOne({ name: name.trim(), platform, apiKey, model, group, description, role: 'employee', status: 'active', addedAt: new Date() });
     res.json({ ok: true, name: name.trim() });
@@ -554,9 +554,9 @@ app.post('/admin/council/:agentId/chat', requireAdmin, async (req, res) => {
     const { message } = req.body;
     const isGroq = agentId === 'groq-council';
     const agent = {
-      platform: isGroq ? 'Groq' : 'Gemini',
-      apiKey: isGroq ? process.env.GROQ_API_KEY : process.env.GEMINI_API_KEY,
-      model: isGroq ? 'llama-3.3-70b-versatile' : 'gemini-2.0-flash',
+      platform: isGroq ? 'Groq' : 'OpenRouter',
+      apiKey: isGroq ? process.env.GROQ_API_KEY : process.env.OPENROUTER_API_KEY,
+      model: isGroq ? 'llama3-70b-8192' : 'meta-llama/llama-3.1-8b-instruct:free',
       name: isGroq ? 'Groq' : 'Gemini'
     };
     const history = await db.collection('chatHistory').findOne({ agentId });
@@ -590,8 +590,8 @@ async function testAI(agent) {
 
 async function dailyCouncilCheck() {
   try {
-    const groqOk = await testAI({ platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' });
-    const geminiOk = await testAI({ platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' });
+    const groqOk = await testAI({ platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama3-70b-8192' });
+    const geminiOk = await testAI({ platform: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY, model: 'meta-llama/llama-3.1-8b-instruct:free' });
     console.log(`[Daily Check] Groq: ${groqOk ? 'OK' : 'FAIL'} | Gemini: ${geminiOk ? 'OK' : 'FAIL'}`);
   } catch (e) {
     console.error('[Daily Check Error]', e);
@@ -600,8 +600,8 @@ async function dailyCouncilCheck() {
 
 async function dailyReport() {
   try {
-    const groqAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' };
-    const geminiAgent = { platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' };
+    const groqAgent = { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama3-70b-8192' };
+    const geminiAgent = { platform: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY, model: 'meta-llama/llama-3.1-8b-instruct:free' };
     const today = new Date().toLocaleDateString('vi-VN');
     const groqReport = await callAI(groqAgent, `Hôm nay ${today}, hãy tìm và liệt kê 5-10 AI platform có API miễn phí tiềm năng để kết nối vào Fuco AI. Bao gồm: tên, model miễn phí, giới hạn token, link đăng ký, đánh giá tiềm năng.`);
     const geminiReport = await callAI(geminiAgent, `Hôm nay ${today}, báo cáo:\n1. HƯỚNG PHÁT TRIỂN FUCO AI: 3-5 tính năng nên làm tiếp\n2. XU HƯỚNG CÔNG NGHỆ AI: Trends nổi bật và ý tưởng ứng dụng vào web, app, sản phẩm công nghệ`);
@@ -620,8 +620,8 @@ async function dailySummaryAndClear() {
     const agents = ['groq-council', 'gemini-council'];
     const agentNames = { 'groq-council': 'Groq', 'gemini-council': 'Gemini' };
     const agentConfigs = {
-      'groq-council': { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' },
-      'gemini-council': { platform: 'Gemini', apiKey: process.env.GEMINI_API_KEY, model: 'gemini-2.0-flash' }
+      'groq-council': { platform: 'Groq', apiKey: process.env.GROQ_API_KEY, model: 'llama3-70b-8192' },
+      'gemini-council': { platform: 'OpenRouter', apiKey: process.env.OPENROUTER_API_KEY, model: 'meta-llama/llama-3.1-8b-instruct:free' }
     };
     for (const agentId of agents) {
       const history = await db.collection('chatHistory').findOne({ agentId });
